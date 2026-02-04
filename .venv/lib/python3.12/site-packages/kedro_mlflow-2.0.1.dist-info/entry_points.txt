@@ -1,0 +1,5 @@
+[kedro.hooks]
+mlflow_hook = kedro_mlflow.framework.hooks.mlflow_hook:mlflow_hook
+
+[kedro.project_commands]
+kedro_mlflow = kedro_mlflow.framework.cli.cli:commands

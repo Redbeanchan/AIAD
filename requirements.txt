@@ -1,0 +1,19 @@
+# AIAD – root-level dependencies
+# Install from project root: pip install -r requirements.txt (with venv activated)
+
+# Data versioning
+dvc>=3.0
+
+# Kedro and pipeline (ml/background-remover-pipeline)
+kedro[jupyter]~=1.2.0
+kedro-datasets[pandas-csvdataset, pandas-exceldataset, pandas-parquetdataset, plotly-plotlydataset, plotly-jsondataset, matplotlib-matplotlibdataset]>=3.0
+kedro-viz>=6.7.0
+
+# Example pipeline / datasets
+scikit-learn~=1.5.1
+seaborn~=0.12.1
+openpyxl>=3.0
+plotly>=5.0
+
+# Experiment tracking (used manually until kedro-mlflow is compatible with Kedro 1.2)
+mlflow>=2.0

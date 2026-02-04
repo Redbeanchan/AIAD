@@ -1,0 +1,271 @@
+from logging import Logger, getLogger
+from typing import Iterable, Optional, Union
+
+from kedro.pipeline import Pipeline
+from kedro.pipeline.node import Node
+
+MSG_WARNING_PIPELINEML_DEMOTED = (
+    "BEWARE - This 'Pipeline' is no longer a 'PipelineML' object. "
+    "This method is only implemented for compatibility with kedro-viz and pipeline resume hints on failure."
+    "It should never be used directly.\nSee "
+    "https://github.com/Galileo-Galilei/kedro-mlflow/issues/569 "
+    " for more context. "
+)
+
+
+class PipelineML(Pipeline):
+    """
+    IMPORTANT NOTE : THIS CLASS IS NOT INTENDED TO BE USED DIRECTLY IN A KEDRO PROJECT. YOU SHOULD USE
+    ``pipeline_ml_factory`` FUNCTION FOR MODULAR PIPELINE WHICH IS MORE FLEXIBLE AND USER FRIENDLY.
+    SEE INSERT_DOC_URL
+
+    A ``PipelineML`` is a kedro ``Pipeline`` which we assume is a "training" (in the machine learning way)
+    pipeline. Basically, "training" is a higher order function (it generates another function). It implies that:
+    -  the outputs of this pipeline are considered as "fitted models", i.e. inputs
+    of another inference pipeline (it is very likely that there are several outputs because we need to store any
+    object that depends on the train data (e.g encoders, binarizers, vectorizer, machine learning models...)
+    - These outputs will feed another "inference" pipeline (to be used for prediction purpose) whose inputs
+     are the outputs of the "training" pipeline, except for one of them (the new data to predict).
+
+     This class enables to "link" a training pipeline and an inference pipeline in order to package them
+     in mlflow easily. The goal is to call the ``MlflowHook`` hook after a PipelineMl is called
+     in order to trigger mlflow packaging.
+
+    """
+
+    KPM_KWARGS_DEFAULT = {}
+    LOG_MODEL_KWARGS_DEFAULT = {"signature": "auto", "name": "model"}
+
+    def __init__(
+        self,
+        nodes: Iterable[Union[Node, Pipeline]],
+        *args,
+        tags: Optional[Union[str, Iterable[str]]] = None,
+        inference: Pipeline,
+        input_name: str,
+        kpm_kwargs: Optional[dict[str, str]] = None,
+        log_model_kwargs: Optional[dict[str, str]] = None,
+    ):
+        """Store all necessary information for calling mlflow.log_model in the pipeline.
+
+        Args:
+            nodes (Iterable[Union[Node, Pipeline]]): The `node`s
+                of the training pipeline.
+            tags (Union[str, Iterable[str]], optional): Optional
+                set of tags to be applied to all the pipeline
+                nodes. Defaults to None.
+            inference (Pipeline): A `Pipeline` object which will be
+                stored in mlflow and use the output(s)
+                of the training pipeline (namely, the model)
+                to predict the outcome.
+            input_name (str, optional): The name of the dataset in
+                the catalog.yml which the model's user must provide
+                for prediction (i.e. the data). Defaults to None.
+            kpm_kwargs:
+                extra arguments to be passed to `KedroPipelineModel`
+                when the PipelineML object is automatically saved at the end of a run.
+                This includes:
+                    - `copy_mode`: the copy_mode to be used for underlying dataset
+                    when loaded in memory
+                    - `runner`: the kedro runner to run the model with
+            log_model_kwargs:
+                extra arguments to be passed to `mlflow.pyfunc.log_model`, e.g.:
+                    - "signature" accepts an extra "auto" which automatically infer the signature
+                    based on "input_name" dataset
+
+        """
+
+        super().__init__(nodes, *args, tags=tags)
+
+        self.inference = inference
+        self.input_name = input_name
+        # they will be passed to KedroPipelineModel to enable flexibility
+
+        kpm_kwargs = kpm_kwargs or {}
+        self.kpm_kwargs = {**self.KPM_KWARGS_DEFAULT, **kpm_kwargs}
+
+        log_model_kwargs = log_model_kwargs or {}
+        if "name" in log_model_kwargs and "artifact_path" in log_model_kwargs:
+            raise KedroMlflowPipelineMLError(
+                "Both 'artifact_path' (deprecated in MLflow v3) and 'name' "
+                "parameters were specified. Please only specify 'name'."
+            )
+        elif "artifact_path" in log_model_kwargs:
+            self._logger.warning(
+                "'artifact_path' is deprecated in MLflow v3. Please use 'name' instead."
+            )
+            log_model_kwargs["name"] = log_model_kwargs.pop("artifact_path")
+        self.log_model_kwargs = {**self.LOG_MODEL_KWARGS_DEFAULT, **log_model_kwargs}
+        self._check_consistency()
+
+    @property
+    def _logger(self) -> Logger:
+        return getLogger(__name__)
+
+    @property
+    def training(self) -> Pipeline:
+        return Pipeline(self.nodes)
+
+    @property
+    def inference(self) -> str:
+        return self._inference
+
+    @inference.setter
+    def inference(self, inference: Pipeline) -> None:
+        self._check_inference(inference)
+        self._inference = inference
+
+    @property
+    def input_name(self) -> str:
+        return self._input_name
+
+    @input_name.setter
+    def input_name(self, name: str) -> None:
+        allowed_names = self.inference.inputs()
+        pp_allowed_names = "\n    - ".join(allowed_names)
+        if name not in allowed_names:
+            raise KedroMlflowPipelineMLError(
+                f"input_name='{name}' but it must be an input of 'inference'"
+                f", i.e. one of: \n    - {pp_allowed_names}"
+            )
+        self._input_name = name
+
+    def _check_inference(self, inference: Pipeline) -> None:
+        nb_outputs = len(inference.outputs())
+        outputs_txt = "\n - ".join(inference.outputs())
+        if len(inference.outputs()) != 1:
+            raise KedroMlflowPipelineMLError(
+                "The inference pipeline must have one"
+                " and only one output. You are trying"
+                " to set a inference pipeline with"
+                f" '{nb_outputs}' output(s): \n - {outputs_txt}"
+                " "
+            )
+
+    def _check_consistency(self) -> None:
+        inference_parameters = {
+            input for input in self.inference.inputs() if input.startswith("params:")
+        }
+
+        free_inputs_set = (
+            self.inference.inputs()
+            - {self.input_name}
+            - self.all_outputs()
+            - self.inputs()
+            - inference_parameters  # it is allowed to pass parameters: they will be automatically persisted by the hook
+        )
+
+        if len(free_inputs_set) > 0:
+            input_set_txt = "\n     - ".join(free_inputs_set)
+            raise KedroMlflowPipelineMLError(
+                "The following inputs are free for the inference pipeline:\n"
+                f"    - {input_set_txt}."
+                " \nNo free input is allowed."
+                " Please make sure that 'inference.inputs()' are all"
+                " in 'training.all_outputs() + training.inputs()'"
+                "except 'input_name' and parameters which starts with 'params:'."
+            )
+
+    def _turn_pipeline_to_ml(self, pipeline: Pipeline):
+        return PipelineML(
+            nodes=pipeline.nodes,
+            inference=self.inference,
+            input_name=self.input_name,
+            kpm_kwargs=self.kpm_kwargs,
+            log_model_kwargs=self.log_model_kwargs,
+        )
+
+    def only_nodes(self, *node_names: str) -> "Pipeline":  # pragma: no cover
+        self._logger.warning(MSG_WARNING_PIPELINEML_DEMOTED)
+        return self.training.only_nodes(*node_names)
+
+    def only_nodes_with_namespaces(
+        self, node_namespaces: str
+    ) -> "Pipeline":  # pragma: no cover
+        self._logger.warning(MSG_WARNING_PIPELINEML_DEMOTED)
+        return self.training.only_nodes_with_namespaces(node_namespaces)
+
+    def only_nodes_with_inputs(self, *inputs: str) -> "Pipeline":  # pragma: no cover
+        self._logger.warning(MSG_WARNING_PIPELINEML_DEMOTED)
+        return self.training.only_nodes_with_inputs(*inputs)
+
+    def from_inputs(self, *inputs: str) -> "PipelineML":  # pragma: no cover
+        # exceptionnally, we don't call super() because it raises
+        # a self._check_degrees_of_freedom() error even if valid cases
+        # this is because the pipeline is reconstructed node by node
+        # (only the first node may lead to invalid pipeline (e.g.
+        # with not all artifacts)), even if the whole pipeline is ok
+        # we want the call to self._check_degrees_of_freedom() only call at the end.
+        pipeline = self.training.from_inputs(*inputs)
+        return self._turn_pipeline_to_ml(pipeline)
+
+    def only_nodes_with_outputs(self, *outputs: str) -> "Pipeline":  # pragma: no cover
+        self._logger.warning(MSG_WARNING_PIPELINEML_DEMOTED)
+        return self.training.only_nodes_with_outputs(*outputs)
+
+    def to_outputs(self, *outputs: str) -> "PipelineML":  # pragma: no cover
+        # see from_inputs for an explanation of why we don't call super()
+        pipeline = self.training.from_nodes(*outputs)
+        return self._turn_pipeline_to_ml(pipeline)
+
+    def from_nodes(self, *node_names: str) -> "PipelineML":  # pragma: no cover
+        # see from_inputs for an explanation of why we don't call super()
+        pipeline = self.training.from_nodes(*node_names)
+        return self._turn_pipeline_to_ml(pipeline)
+
+    def to_nodes(self, *node_names: str) -> "PipelineML":  # pragma: no cover
+        # see from_inputs for an explanation of why we don't call super()
+        pipeline = self.training.to_nodes(*node_names)
+        return self._turn_pipeline_to_ml(pipeline)
+
+    def only_nodes_with_tags(self, *tags: str) -> "PipelineML":  # pragma: no cover
+        # see from_inputs for an explanation of why we don't call super()
+        pipeline = self.training.only_nodes_with_tags(*tags)
+        return self._turn_pipeline_to_ml(pipeline)
+
+    def tag(self, tags: Union[str, Iterable[str]]) -> "PipelineML":
+        pipeline = super().tag(*tags)
+        return self._turn_pipeline_to_ml(pipeline)
+
+    def filter(  # noqa: PLR0913
+        self,
+        tags: Iterable[str] | None = None,
+        from_nodes: Iterable[str] | None = None,
+        to_nodes: Iterable[str] | None = None,
+        node_names: Iterable[str] | None = None,
+        from_inputs: Iterable[str] | None = None,
+        to_outputs: Iterable[str] | None = None,
+        node_namespaces: Iterable[str] | None = None,
+    ) -> Pipeline:
+        # see from_inputs for an explanation of why we don't call super()
+        pipeline = self.training.filter(
+            tags=tags,
+            from_nodes=from_nodes,
+            to_nodes=to_nodes,
+            node_names=node_names,
+            from_inputs=from_inputs,
+            to_outputs=to_outputs,
+            node_namespaces=node_namespaces,
+        )
+        return self._turn_pipeline_to_ml(pipeline)
+
+    def __add__(self, other):  # pragma: no cover
+        self._logger.warning(MSG_WARNING_PIPELINEML_DEMOTED)
+        return self.training + other
+
+    def __sub__(self, other):  # pragma: no cover
+        self._logger.warning(MSG_WARNING_PIPELINEML_DEMOTED)
+        return self.training - other
+
+    def __and__(self, other):  # pragma: no cover
+        # kept for compatibility with KedroContext _filter_pipelinefunction
+        new_pipeline = super().__and__(other)
+        return self._turn_pipeline_to_ml(new_pipeline)
+
+    def __or__(self, other):  # pragma: no cover
+        self._logger.warning(MSG_WARNING_PIPELINEML_DEMOTED)
+        return self.training | other
+
+
+class KedroMlflowPipelineMLError(Exception):
+    """Error raised when the KedroPipelineModel construction fails"""
