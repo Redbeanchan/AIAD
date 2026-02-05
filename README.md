@@ -98,7 +98,40 @@ pip install -r requirements.txt
 
 This installs DVC, Kedro, the Kedro pipeline dependencies (including `openpyxl`, `plotly`, etc.), and MLflow so you can run the pipeline and (later) use MLflow in code.
 
-### 4. Run the Kedro pipeline
+### 4. Run the background-removal web app
+
+This is the simple web app that lets you upload an image and get it back with the background removed.
+
+1. **Install API dependencies** (once per environment):
+
+   ```bash
+   cd services/api
+   pip install -r requirements.txt
+   ```
+
+2. **Start the API** (background remover service) in one terminal:
+
+   ```bash
+   cd /home/alex/AIAD/services/api
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+3. **Start the UI** in another terminal:
+
+   ```bash
+   cd /home/alex/AIAD/services/ui
+   python -m http.server 8080
+   ```
+
+4. **Use the app**:
+   - Open `http://localhost:8080` in your browser.
+   - Choose an image file.
+   - Click **“Remove background”**.
+   - The page will call the API on port 8000 and show the processed image (background removed).
+
+The API uses the open-source `rembg` model (`isnet-general-use`) under the hood.
+
+### 5. Run the Kedro pipeline
 
 From the **project root**:
 
@@ -116,7 +149,7 @@ cd ml/background-remover-pipeline && kedro run
 
 The example pipeline (9 tasks) should complete successfully. Outputs go to `ml/background-remover-pipeline/data/` (e.g. `02_intermediate`, `06_models`, `08_reporting`).
 
-### 5. (Optional) DVC
+### 6. (Optional) DVC
 
 - **Check status:** `dvc status`
 - **When you have data:** e.g. `dvc add data/raw`, then `git add data/raw.dvc .gitignore` and commit.
