@@ -1,6 +1,6 @@
 # AIAD – Background Remover Platform
 
-A background-removal platform with data versioning (DVC), an ML training pipeline (Kedro), and future API/UI/worker services. Everything runs locally; collaboration is via GitHub.
+A background-removal platform with data versioning (DVC), an ML training pipeline (Kedro), and API/UI/worker services. Everything runs locally; collaboration is via GitHub.
 
 ---
 
@@ -25,10 +25,15 @@ A background-removal platform with data versioning (DVC), an ML training pipelin
 - **Kedro-MLflow plugin** is disabled in `settings.py` (`DISABLE_HOOKS_FOR_PLUGINS = ("kedro_mlflow",)`) due to a compatibility issue with Kedro 1.2 (`pipeline_name` in run params). MLflow can be used manually in nodes when you add training.
 - **MLflow config** is in `ml/background-remover-pipeline/conf/local/mlflow.yml` with tracking URI `mlflow_runs` (local folder).
 
+### Step 4: Web app (API + UI) with pretrained model
+- **API** (`services/api`): FastAPI app using **rembg** with the **isnet-general-use** model for background removal. Endpoint: `POST /remove-background` (upload image, get PNG with background removed). Optional GPU support via `rembg[gpu]` (see `services/api/requirements.txt`).
+- **UI** (`services/ui`): Simple HTML/JS frontend to upload an image and display the result from the API. Served as static files (e.g. `python -m http.server 8080`).
+- Both run locally: API on port 8000, UI on port 8080.
+
 ### Not done yet (planned)
-- **Step 4:** Full MLflow integration (manual logging in nodes until kedro-mlflow supports Kedro 1.2).
-- **Step 5:** Pre-trained model (e.g. from Hugging Face) under `ml/models/base/standard-segmentation/`.
-- **Step 6–8:** API service (FastAPI), worker (Celery), UI.
+- **Step 5:** Full MLflow integration (manual logging in nodes until kedro-mlflow supports Kedro 1.2).
+- **Step 6:** Pre-trained model assets under `ml/models/base/standard-segmentation/` (e.g. from Hugging Face) for the Kedro pipeline.
+- **Step 7–8:** Worker service (Celery), and any extra API/UI features.
 - **Step 9–14:** Docker, Kubernetes/Helm, Argo CD, monitoring.
 
 ---
@@ -54,10 +59,10 @@ AIAD/
 │   ├── dvc/
 │   └── mlflow/
 ├── services/
-│   ├── api/                 # Future FastAPI app
-│   ├── ui/                  # Future frontend
+│   ├── api/                 # FastAPI background-removal API (rembg)
+│   ├── ui/                  # Web UI for upload & result
 │   └── worker/              # Future training worker
-├── README.md                # This file (or README_PROJECT.md)
+├── README.md                # This file
 └── requirements.txt         # Root-level Python deps (see below)
 ```
 
@@ -109,17 +114,17 @@ This is the simple web app that lets you upload an image and get it back with th
    pip install -r requirements.txt
    ```
 
-2. **Start the API** (background remover service) in one terminal:
+2. **Start the API** (background remover service) in one terminal (from repo root):
 
    ```bash
-   cd /home/alex/AIAD/services/api
+   cd services/api
    uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-3. **Start the UI** in another terminal:
+3. **Start the UI** in another terminal (from repo root):
 
    ```bash
-   cd /home/alex/AIAD/services/ui
+   cd services/ui
    python -m http.server 8080
    ```
 
