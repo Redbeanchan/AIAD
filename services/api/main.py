@@ -1,6 +1,6 @@
 """
 AIAD API – background removal using rembg (isnet-general-use).
-POST /remove-background: upload image, returns PNG with background removed.
+POST /remove-background: upload image, returns PNG with background removed.x
 """
 import io
 import asyncio

@@ -1,5 +1,5 @@
-"""background-remover-pipeline file for ensuring the package is executable
-as `background-remover-pipeline` and `python -m background_remover_pipeline`
+"""background_removal file for ensuring the package is executable
+as `background-removal` and `python -m background_removal`
 """
 import sys
 from pathlib import Path
