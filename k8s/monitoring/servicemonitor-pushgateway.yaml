@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pushgateway
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-pushgateway
+  namespaceSelector:
+    matchNames:
+      - monitoring
+  endpoints:
+    - port: http
+      interval: 5s
+      honorLabels: true
