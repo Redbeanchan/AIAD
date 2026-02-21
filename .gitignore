@@ -1,1 +1,34 @@
-mlflow_runs/
+# ----------------------
+# Kedro data folders
+# ----------------------
+data/*
+!data/.gitkeep
+
+# Ignore all local configs (but not base configs)
+conf/local/
+conf/local/**
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Env files
+.env
+*.env
+
+# Jupyter checkpoints
+*.ipynb_checkpoints
+
+# VS Code & IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Large archives
+*.zip
+*.tar.gz
+
+.venv/
+*.venv/
