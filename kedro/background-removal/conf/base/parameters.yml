@@ -17,7 +17,7 @@ supervisely_csv_path: "data/01_raw/supervisely_person/df.csv"
 # IMPORTANT: set this to the actual extracted folder that contains the images/masks referenced by df.csv
 # Example (yours will differ):
 # supervisely_root: "data/01_raw/supervisely_person/supervisely_person_clean_2667_img/supervisely_person_clean_2667_img"
-supervisely_root: "data/01_raw/supervisely_person/<PUT_REAL_EXTRACTED_FOLDER_HERE>"
+supervisely_root: "data/01_raw/supervisely_person/supervisely_person_clean_2667_img/supervisely_person_clean_2667_img"
 
 personseg_images_dir: "data/01_raw/person_segmentation/people_segmentation/images"
 personseg_masks_dir:  "data/01_raw/person_segmentation/people_segmentation/masks"

@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # If you later expose an app metrics endpoint, add it here
+  # - job_name: "ui"
+  #   static_configs:
+  #     - targets: ["ui:8080"]

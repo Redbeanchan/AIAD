@@ -1,12 +1,23 @@
-# keep code/config – ignore heavy/volatile stuff
-data/**
-!data/06_models
-!data/06_models/model.h5
-.git
-.venv
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
-.DS_Store
-.viz/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.ipynb_checkpoints/
+**/.DS_Store
+
+.git/
+.vscode/
+.idea/
+
+# Kedro
+kedro/background-removal/.viz/
+kedro/background-removal/data/
+kedro/background-removal/notebooks/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

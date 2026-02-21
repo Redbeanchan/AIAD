@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.6
+FROM python:3.10-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# System deps (TF/matplotlib/PIL commonly need these)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    curl \
+    ca-certificates \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+ && rm -rf /var/lib/apt/lists/*
+
+# ----------------------------
+# Copy ONLY dependency files first (better layer caching)
+# ----------------------------
+WORKDIR /app/background-removal
+
+COPY kedro/background-removal/requirements.txt /app/background-removal/requirements.txt
+COPY kedro/background-removal/pyproject.toml /app/background-removal/pyproject.toml
+# If you have any other dependency lock files, copy them too (optional):
+# COPY kedro/background-removal/poetry.lock /app/background-removal/poetry.lock
+
+RUN pip install --upgrade pip setuptools wheel \
+ && pip install -r requirements.txt
+
+# ----------------------------
+# Copy the rest of the Kedro project
+# ----------------------------
+COPY kedro/background-removal /app/background-removal
+
+# Install project editable (so imports work cleanly)
+RUN pip install -e .
+
+# Entry point (old-project style)
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Default: open shell
+CMD ["bash"]
