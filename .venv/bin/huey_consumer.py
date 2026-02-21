@@ -1,4 +1,4 @@
-#!/home/alex/AIAD/.venv/bin/python3
+#!/home/sam/Documents/AIAD/aiad_background_removal/bin/python
 
 import logging
 import os
