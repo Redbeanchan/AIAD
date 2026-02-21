@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bgbye-ui
+  namespace: bgbye
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bgbye-ui
+  template:
+    metadata:
+      labels:
+        app: bgbye-ui
+    spec:
+      containers:
+        - name: ui
+          image: bgbye-ui:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+          # if UI needs models/data
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bgbye-data-pvc

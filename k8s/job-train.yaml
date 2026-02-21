@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bgbye-job-train
+  namespace: bgbye
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: kedro
+          image: bgbye-train:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KEDRO_ENV
+              value: "local"
+            - name: KEDRO_PIPELINE
+              value: "model_training"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "6Gi"
+            limits:
+              cpu: "4"
+              memory: "12Gi"
+              # nvidia.com/gpu: "1"   # uncomment if GPU nodes + nvidia device plugin
+          volumeMounts:
+            - name: data
+              mountPath: /app/background-removal/data
+            - name: kedro-conf
+              mountPath: /app/background-removal/conf/local
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bgbye-data-pvc
+        - name: kedro-conf
+          configMap:
+            name: bgbye-kedro-conf

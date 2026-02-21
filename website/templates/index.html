@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Background Removal</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="container">
+      <h1>Image Background Removal</h1>
+      <p class="hint">Allowed: jpg/png/webp — Max: 10MB</p>
+
+      <section class="upload-area" id="drop-area">
+        <input type="file" id="file-input" accept="image/*">
+        <p>Drag & drop an image here, or click to select</p>
+        <div id="file-name"></div>
+      </section>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Online APIs</h2>
+          <p class="small">Send the image to a third-party API provider (uses env keys). Falls back to a mock result if key is missing.</p>
+          <label for="provider">API Provider</label>
+          <select id="provider">
+            {% for p in providers %}
+            <option value="{{p}}">{{p}}</option>
+            {% endfor %}
+          </select>
+          <button id="process-api">Process (API)</button>
+        </div>
+
+        <div class="card">
+          <h2>Self Train (Pickle Files)</h2>
+          <p class="small">Use a local pickle model under <strong>/models/</strong>. Falls back to a simple heuristic if missing.</p>
+          <label for="model-name">Model filename</label>
+          <input id="model-name" placeholder="segmenter.pkl" value="segmenter.pkl">
+          <button id="process-local">Process (Local)</button>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <section class="results">
+        <div class="preview">
+          <h3>Before</h3>
+          <img id="before-img" src="" alt="before" hidden>
+        </div>
+        <div class="preview">
+          <h3>After</h3>
+          <img id="after-img" src="" alt="after" hidden>
+          <a id="download-link" href="#" download="result.png" hidden>Download PNG</a>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const fileInput = document.getElementById('file-input');
+      const dropArea = document.getElementById('drop-area');
+      const fileName = document.getElementById('file-name');
+      const status = document.getElementById('status');
+      const beforeImg = document.getElementById('before-img');
+      const afterImg = document.getElementById('after-img');
+      const downloadLink = document.getElementById('download-link');
+
+      function setStatus(text, err=false){
+        status.textContent = text;
+        status.className = err ? 'status error' : 'status';
+      }
+
+      dropArea.addEventListener('click', ()=> fileInput.click());
+      dropArea.addEventListener('dragover', (e)=>{ e.preventDefault(); dropArea.classList.add('drag'); });
+      dropArea.addEventListener('dragleave', ()=> dropArea.classList.remove('drag'));
+      dropArea.addEventListener('drop', (e)=>{
+        e.preventDefault(); dropArea.classList.remove('drag');
+        const f = e.dataTransfer.files[0]; if(f) { fileInput.files = e.dataTransfer.files; onFileChange(); }
+      });
+
+      fileInput.addEventListener('change', onFileChange);
+      function onFileChange(){
+        const f = fileInput.files[0];
+        if(!f) return;
+        fileName.textContent = `${f.name} (${Math.round(f.size/1024)} KB)`;
+        beforeImg.src = URL.createObjectURL(f); beforeImg.hidden = false;
+        afterImg.hidden = true; downloadLink.hidden = true; setStatus('Ready');
+      }
+
+      async function postImage(url, formData){
+        setStatus('Processing...');
+        try{
+          const res = await fetch(url, { method: 'POST', body: formData });
+          const data = await res.json();
+          if(!res.ok) throw new Error(data.error || 'Processing failed');
+          beforeImg.src = data.before; beforeImg.hidden = false;
+          afterImg.src = data.after; afterImg.hidden = false;
+          downloadLink.href = data.after; downloadLink.hidden = false;
+          setStatus('Done');
+        }catch(err){
+          setStatus(err.message || 'Error', true);
+        }
+      }
+
+      document.getElementById('process-api').addEventListener('click', ()=>{
+        const f = fileInput.files[0]; if(!f){ setStatus('No file selected', true); return; }
+        const fd = new FormData(); fd.append('image', f);
+        fd.append('provider', document.getElementById('provider').value);
+        postImage('/process/api', fd);
+      });
+
+      document.getElementById('process-local').addEventListener('click', ()=>{
+        const f = fileInput.files[0]; if(!f){ setStatus('No file selected', true); return; }
+        const fd = new FormData(); fd.append('image', f);
+        fd.append('model', document.getElementById('model-name').value || 'segmenter.pkl');
+        postImage('/process/local', fd);
+      });
+    </script>
+  </body>
+</html>

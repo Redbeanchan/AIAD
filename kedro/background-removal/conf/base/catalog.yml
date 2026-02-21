@@ -2,3 +2,25 @@
 #
 # Documentation for this file format can be found in "The Data Catalog"
 # Link: https://docs.kedro.org/en/stable/data/data_catalog.html
+manifest:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/manifest.csv
+
+train_manifest:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/train_manifest.csv
+
+val_manifest:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/val_manifest.csv
+
+training_history:
+  type: json.JSONDataset
+  filepath: data/08_reporting/training_history.json
+
+# eval_preview_path is a STRING returned by the node.
+# The image itself is written directly to params:eval_output_path by fig.savefig().
+# If you still want to persist the returned path string:
+eval_preview_path:
+  type: text.TextDataset
+  filepath: data/08_reporting/eval_preview_path.txt

@@ -1,0 +1,8 @@
+# syntax=docker/dockerfile:1.6
+FROM bgbye-kedro:latest AS train
+
+WORKDIR /app/background-removal
+
+COPY docker/entrypoint.train.sh /entrypoint.train.sh
+RUN chmod +x /entrypoint.train.sh
+ENTRYPOINT ["/entrypoint.train.sh"]

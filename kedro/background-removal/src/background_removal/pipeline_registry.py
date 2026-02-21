@@ -1,16 +1,35 @@
 """Project pipelines."""
 from __future__ import annotations
 
-from kedro.framework.project import find_pipelines
 from kedro.pipeline import Pipeline
+
+from background_removal.pipelines.data_ingestion import (
+    create_pipeline as ingestion_pipeline,
+)
+from background_removal.pipelines.data_preprocessing import (
+    create_pipeline as preprocessing_pipeline,
+)
+from background_removal.pipelines.model_training import (
+    create_pipeline as training_pipeline,
+)
+from background_removal.pipelines.model_evaluation import (
+    create_pipeline as evaluation_pipeline,
+)
 
 
 def register_pipelines() -> dict[str, Pipeline]:
-    """Register the project's pipelines.
+    data_ingestion = ingestion_pipeline()
+    data_preprocessing = preprocessing_pipeline()
+    model_training = training_pipeline()
+    model_evaluation = evaluation_pipeline()
 
-    Returns:
-        A mapping from pipeline names to ``Pipeline`` objects.
-    """
-    pipelines = find_pipelines()
-    pipelines["__default__"] = sum(pipelines.values())
-    return pipelines
+    full = data_ingestion + data_preprocessing + model_training + model_evaluation
+
+    return {
+        "__default__": full,
+        "full": full,
+        "data_ingestion": data_ingestion,
+        "data_preprocessing": data_preprocessing,
+        "model_training": model_training,
+        "model_evaluation": model_evaluation,
+    }
