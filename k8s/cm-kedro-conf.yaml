@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bgbye-kedro-conf
+  namespace: bgbye
+data:
+  # If you want to override *base* config at runtime:
+  parameters_data_ingestion.yml: |
+    gdrive_files:
+      person_segmentation: "1lbWAVnHnk3gCWJBCJK43EUnM34D7w2GH"
+      supervisely_person: "15kVoqVOQqXvDYZZ3PnZu9dv3NCcCIfAv"
+      tiktok_dance_segmentation: "1i4seE7Vpa9Ai31ZRbyLnYLk9zrRWP5_g"
+    raw_output_root: "data/01_raw"
+    delete_zip: true
+
+  parameters_data_preprocessing.yml: |
+    supervisely_csv_path: "data/01_raw/supervisely_person/df.csv"
+    supervisely_root: "data/01_raw/supervisely_person/<PUT_REAL_EXTRACTED_FOLDER_HERE>"
+    personseg_images_dir: "data/01_raw/person_segmentation/people_segmentation/images"
+    personseg_masks_dir: "data/01_raw/person_segmentation/people_segmentation/masks"
+    val_split: 0.10
+    random_state: 42
+
+  parameters_model_training.yml: |
+    img_size: 512
+    batch_size: 4
+    shuffle_buffer: 256
+    base_channels: 32
+    lr: 0.0001
+    epochs: 5
+    model_output_path: "data/06_models/my_model.keras"
+
+  parameters_model_evaluation.yml: |
+    eval_n_samples: 5
+    eval_random_state: 432
+    eval_threshold: 0.5
+    eval_output_path: "data/08_reporting/qualitative_preview.png"

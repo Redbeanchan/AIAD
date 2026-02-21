@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bgbye-job-ingestion
+  namespace: bgbye
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: kedro
+          image: bgbye-train:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KEDRO_ENV
+              value: "local"
+            - name: KEDRO_PIPELINE
+              value: "data_ingestion"
+          volumeMounts:
+            - name: data
+              mountPath: /app/background-removal/data
+            - name: kedro-conf
+              mountPath: /app/background-removal/conf/local
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bgbye-data-pvc
+        - name: kedro-conf
+          configMap:
+            name: bgbye-kedro-conf
