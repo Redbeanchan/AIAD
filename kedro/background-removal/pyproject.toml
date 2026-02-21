@@ -28,3 +28,6 @@ attr = "background_removal.__version__"
 [tool.setuptools.packages.find]
 where = [ "src",]
 namespaces = false
+
+[tool.kedro_telemetry]
+project_id = "a32da4cd1820404887b494ffe2babe60"
