@@ -22,20 +22,77 @@ spec:
           env:
             - name: PORT
               value: "8080"
+
+    
+            - name: REMOVE_BG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bgbye-secrets
+                  key: REMOVE_BG_API_KEY
+                  optional: true
+            - name: CLIPDROP_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bgbye-secrets
+                  key: CLIPDROP_API_KEY
+                  optional: true
+            - name: PHOTOROOM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bgbye-secrets
+                  key: PHOTOROOM_API_KEY
+                  optional: true
+
+
             - name: SERVICE_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: bgbye-secrets
                   key: SERVICE_API_KEY
+                  optional: true
             - name: MAX_BATCH_IMAGES
               valueFrom:
                 secretKeyRef:
                   name: bgbye-secrets
                   key: MAX_BATCH_IMAGES
-          # if UI needs models/data
+                  optional: true
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+
           volumeMounts:
             - name: data
-              mountPath: /app/data
+              mountPath: /app/website/static
+              subPath: ui_static
+            - name: data
+              mountPath: /app/website/models
+              subPath: ui_models
+
       volumes:
         - name: data
           persistentVolumeClaim:
