@@ -3,7 +3,7 @@
 This is a small Flask app demonstrating two modes for background removal:
 
 - **Online APIs**: sends the image to a provider (placeholder). Uses environment variables for API keys; if missing, falls back to a mock result.
-- **Self Train (Pickle Files)**: loads a local pickle "model" from `/models/segmenter.pkl`. If missing or invalid, a simple heuristic mask is used.
+- **Self Train (model Files)**: loads a local  "model" from `/models/segmenter.keras`. If missing or invalid, a simple heuristic mask is used.
 
 Quick start
 
@@ -42,8 +42,6 @@ Place pickled model artifacts into the `models/` folder. Expected interface:
 # model.predict(image_array) -> mask (H,W) as 0..255 or 0..1
 ```
 
-If no valid pickle is found, the app will use a simple fallback heuristic that treats corner colors as background.
-
 Files
 
 - `app.py` - Flask app
@@ -52,6 +50,3 @@ Files
 - `models/` - place your pickle files here
 - `static/uploads/` & `static/results/` - images are stored here
 
-Optional: create a dummy pickle for testing using `scripts/create_dummy_pickles.py`.
-# testing_background
-testing if background removal website works
