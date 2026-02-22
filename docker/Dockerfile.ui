@@ -1,32 +1,32 @@
 # syntax=docker/dockerfile:1.6
-FROM python:3.10-slim AS ui
+FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# deps for pillow
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     ca-certificates \
+    curl \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender1 \
  && rm -rf /var/lib/apt/lists/*
 
-# UI requirements
-COPY requirements.ui.txt /app/requirements.ui.txt
+# install UI deps
+COPY docker/requirements.ui.txt /app/requirements.ui.txt
 RUN pip install --upgrade pip \
  && pip install -r /app/requirements.ui.txt
 
-# Copy UI source (CHANGE this to your UI folder)
-COPY ui /app/ui
+# copy website app
+COPY website /app/website
 
-# Gunicorn config (you already have gunicorn.conf.py)
-COPY gunicorn.conf.py /app/gunicorn.conf.py
+# gunicorn config
+COPY docker/gunicorn.conf.py /app/gunicorn.conf.py
 
 EXPOSE 8080
 
-# Change "ui.app:app" to your actual Flask entrypoint
-CMD ["gunicorn", "-c", "/app/gunicorn.conf.py", "ui.app:app"]
+CMD ["gunicorn", "-c", "/app/gunicorn.conf.py", "website.app:app"]

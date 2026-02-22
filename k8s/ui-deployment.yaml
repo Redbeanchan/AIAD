@@ -22,6 +22,16 @@ spec:
           env:
             - name: PORT
               value: "8080"
+            - name: SERVICE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bgbye-secrets
+                  key: SERVICE_API_KEY
+            - name: MAX_BATCH_IMAGES
+              valueFrom:
+                secretKeyRef:
+                  name: bgbye-secrets
+                  key: MAX_BATCH_IMAGES
           # if UI needs models/data
           volumeMounts:
             - name: data
