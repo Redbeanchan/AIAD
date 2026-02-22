@@ -35,8 +35,8 @@ services:
   # Optional: UI service
   ui:
     build:
-      context: .
-      dockerfile: Dockerfile.ui
+      context: ..
+      dockerfile: docker/Dockerfile.ui
     container_name: bgbye-ui
     environment:
       SERVICE_API_KEY: dev-secret
