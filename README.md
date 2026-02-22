@@ -1,178 +1,293 @@
-# AIAD – Background Remover Platform
+# AIAD Background Removal (Self-Host + Train + Batch API)
 
-A background-removal platform with data versioning (DVC), an ML training pipeline (Kedro), and API/UI/worker services. Everything runs locally; collaboration is via GitHub.
+A background remover built for developers who want to **train**, **evaluate**, and **self-host** their own background removal system end-to-end.
 
----
+This repo provides:
 
-## What's Done So Far
+- **Model training & evaluation** via **Kedro** (reproducible pipelines)
+- A **self-hosted website** (Flask UI) for before/after previews and PNG downloads
+- A **batch-friendly API** for background removal (local model or online providers)
+- Optional **MLOps monitoring** with **Prometheus + Pushgateway + Grafana** for training metrics
 
-### Step 1: Repository and structure
-- Git repo initialized; base directories created:
-  - `services/ui`, `services/api`, `services/worker` – frontend, backend, training worker
-  - `ml/kedro`, `ml/models/base/standard-segmentation`, `ml/models/custom` – ML pipeline and models
-  - `mlops/mlflow`, `mlops/dvc` – experiment tracking and data versioning
-  - `infra/helm`, `infra/argocd`, `infra/monitoring` – Kubernetes and observability (for later)
-- `.gitkeep` files added so Git tracks the folder structure.
+## Why this exists
 
-### Step 2: Data versioning (DVC)
-- DVC initialized in the project root (`dvc init`).
-- `.dvc/` and config committed. No DVC remote yet (local-only); optional to add later for sharing data.
-- Data and models will be tracked with `dvc add` when you have datasets (e.g. `data/raw`).
+When training segmentation models, data variance matters. Relying on a single dataset or a single background distribution can cause models to overfit background cues rather than learning the subject properly.
 
-### Step 3: Kedro training pipeline
-- Kedro project created at **`ml/background-remover-pipeline/`** (name: `background-remover-pipeline`, package: `background_remover_pipeline`).
-- Example pipelines (spaceflights tutorial) are present and runnable: data processing, data science, reporting.
-- **Kedro-MLflow plugin** is disabled in `settings.py` (`DISABLE_HOOKS_FOR_PLUGINS = ("kedro_mlflow",)`) due to a compatibility issue with Kedro 1.2 (`pipeline_name` in run params). MLflow can be used manually in nodes when you add training.
-- **MLflow config** is in `ml/background-remover-pipeline/conf/local/mlflow.yml` with tracking URI `mlflow_runs` (local folder).
-
-### Step 4: Web app (API + UI) with pretrained model
-- **API** (`services/api`): FastAPI app using **rembg** with the **isnet-general-use** model for background removal. Endpoint: `POST /remove-background` (upload image, get PNG with background removed). Optional GPU support via `rembg[gpu]` (see `services/api/requirements.txt`).
-- **UI** (`services/ui`): Simple HTML/JS frontend to upload an image and display the result from the API. Served as static files (e.g. `python -m http.server 8080`).
-- Both run locally: API on port 8000, UI on port 8080.
-
-### Not done yet (planned)
-- **Step 5:** Full MLflow integration (manual logging in nodes until kedro-mlflow supports Kedro 1.2).
-- **Step 6:** Pre-trained model assets under `ml/models/base/standard-segmentation/` (e.g. from Hugging Face) for the Kedro pipeline.
-- **Step 7–8:** Worker service (Celery), and any extra API/UI features.
-- **Step 9–14:** Docker, Kubernetes/Helm, Argo CD, monitoring.
+This project is designed so you can:
+- **Ingest multiple datasets**, train a segmentation model, and evaluate outputs
+- **Remove backgrounds at scale** (batch processing) to generate additional derived datasets
+- Increase dataset diversity (variance) and encourage models to learn **subject features** rather than background noise
 
 ---
 
-## Project layout
+## Features
 
-```
-AIAD/
-├── .dvc/                    # DVC config and cache
-├── .venv/                   # Python virtual environment (create locally, do not commit)
-├── data/                    # Repo-level data (DVC-tracked when you add it)
-├── infra/
-│   ├── argocd/              # Argo CD app manifests
-│   ├── helm/                # Helm charts
-│   └── monitoring/          # Prometheus/Grafana etc.
-├── ml/
-│   ├── background-remover-pipeline/   # Kedro project (run `kedro run` here)
-│   ├── kedro/               # Placeholder
-│   └── models/
-│       ├── base/standard-segmentation/  # Pre-trained model (when added)
-│       └── custom/          # Custom trained models
-├── mlops/
-│   ├── dvc/
-│   └── mlflow/
-├── services/
-│   ├── api/                 # FastAPI background-removal API (rembg)
-│   ├── ui/                  # Web UI for upload & result
-│   └── worker/              # Future training worker
-├── README.md                # This file
-└── requirements.txt         # Root-level Python deps (see below)
-```
+### 1) Kedro Pipelines (ML)
+Pipelines are structured and runnable independently:
+
+- `data_ingestion`  
+  Downloads and extracts datasets (e.g., from Google Drive via `gdown`) into `data/01_raw/`
+
+- `data_preprocessing`  
+  Builds a unified manifest (`images`, `masks`, `source`), validates paths, and splits train/val
+
+- `model_training`  
+  Builds `tf.data` pipelines + trains a ResNet50-UNet segmentation model and saves `.keras`
+
+- `model_evaluation` (qualitative)  
+  Generates a preview grid `[Image | Pred Mask | BG Removed]` and saves to reporting
+
+### 2) Self-hosted Website (UI)
+A Flask-based UI for:
+- Uploading images
+- Viewing Before/After
+- Downloading transparent PNG output
+
+Supports:
+- **Online API mode** (keys via env vars)
+- **Local mode** (model inference; can fall back to a basic heuristic)
+
+### 3) Developer Batch API
+Use the API endpoints to remove backgrounds programmatically for workflows like:
+- dataset preparation
+- augmentation pipelines
+- batch inference
+- generating additional training data
+
+### 4) Monitoring (Optional MLOps)
+- **Prometheus + Pushgateway + Grafana**
+- Training job pushes metrics (e.g., `train_loss`, `val_loss`) so you can track runs over time
 
 ---
 
-## Requirements
+## Repository Layout (high level)
 
-- **Python 3.10+**
-- **Git**
-- **DVC** (installed via `requirements.txt` in a venv)
+- `kedro/background-removal/` — Kedro project (pipelines, configs, training code)
+- `website/` — Flask UI and API (static/uploads/results + templates)
+- `docker/` — Dockerfiles, compose, entrypoints
+- `k8s/` — Kubernetes manifests (jobs, pvc, configmaps, UI deployment)
+- `k8s/monitoring/` — monitoring manifests (ServiceMonitor, etc.)
 
 ---
 
-## How to run everything (local)
+## Quickstart (Local Dev)
 
-### 1. Clone and enter the repo
+### 1) Create venv and install deps (Kedro)
+From the Kedro project folder:
 
 ```bash
-git clone https://github.com/Redbeanchan/AIAD.git
-cd AIAD
-```
-
-### 2. Create and activate a virtual environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-# .venv\Scripts\activate   # Windows
-```
-
-### 3. Install dependencies
-
-From the **project root**:
-
-```bash
+cd kedro/background-removal
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
+pip install -e .
+````
 
-This installs DVC, Kedro, the Kedro pipeline dependencies (including `openpyxl`, `plotly`, etc.), and MLflow so you can run the pipeline and (later) use MLflow in code.
-
-### 4. Run the background-removal web app
-
-This is the simple web app that lets you upload an image and get it back with the background removed.
-
-1. **Install API dependencies** (once per environment):
-
-   ```bash
-   cd services/api
-   pip install -r requirements.txt
-   ```
-
-2. **Start the API** (background remover service) in one terminal (from repo root):
-
-   ```bash
-   cd services/api
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-3. **Start the UI** in another terminal (from repo root):
-
-   ```bash
-   cd services/ui
-   python -m http.server 8080
-   ```
-
-4. **Use the app**:
-   - Open `http://localhost:8080` in your browser.
-   - Choose an image file.
-   - Click **“Remove background”**.
-   - The page will call the API on port 8000 and show the processed image (background removed).
-
-The API uses the open-source `rembg` model (`isnet-general-use`) under the hood.
-
-### 5. Run the Kedro pipeline
-
-From the **project root**:
+### 2) Run Kedro pipelines
 
 ```bash
-cd ml/background-remover-pipeline
-kedro run
-cd ../..
+kedro run --pipeline=data_ingestion
+kedro run --pipeline=data_preprocessing
+kedro run --pipeline=model_training
+kedro run --pipeline=model_evaluation
 ```
 
-Or in one line:
+Outputs:
 
-```bash
-cd ml/background-remover-pipeline && kedro run
-```
-
-The example pipeline (9 tasks) should complete successfully. Outputs go to `ml/background-remover-pipeline/data/` (e.g. `02_intermediate`, `06_models`, `08_reporting`).
-
-### 6. (Optional) DVC
-
-- **Check status:** `dvc status`
-- **When you have data:** e.g. `dvc add data/raw`, then `git add data/raw.dvc .gitignore` and commit.
-- **Remote (optional):** To share data with others, add a DVC remote and use `dvc push` / `dvc pull`.
+* Model: `data/06_models/my_model.keras`
+* Preview: `data/08_reporting/qualitative_preview.png`
 
 ---
 
-## Collaboration
+## Quickstart (Docker)
 
-- **Sync with GitHub:** `git pull origin main` and `git push origin main` as usual.
-- **Credentials:** Use a GitHub Personal Access Token (not your account password) for HTTPS push/pull. To store it once: `git config --global credential.helper store`, then enter the token when prompted on the next push.
-- **Branching:** Use feature branches (e.g. `feature/api-service`) and merge to `main` when ready.
+### Build images
+
+From repo root:
+
+```bash
+docker build -f docker/Dockerfile.kedro -t bgbye-kedro:latest .
+docker build -f docker/Dockerfile.train -t bgbye-train:latest .
+docker build -f docker/Dockerfile.ui    -t bgbye-ui:latest .
+```
+
+### Run UI
+
+```bash
+docker run --rm -p 8080:8080 bgbye-ui:latest
+```
+
+Open: `http://localhost:8080`
+
+### Run training (Kedro)
+
+```bash
+docker run --rm -it bgbye-train:latest
+# or specify pipeline via env:
+docker run --rm -e KEDRO_PIPELINE=model_training bgbye-train:latest
+```
+
+> Note: to persist outputs, mount the `data/` folder as a volume.
 
 ---
 
-## References
+## API Usage (Website)
 
-- [Implementation plan](https://github.com/Redbeanchan/AIAD) (overview of the 14-step plan).
-- [Kedro docs](https://docs.kedro.org)
-- [DVC docs](https://dvc.org/doc)
-- [MLflow docs](https://mlflow.org/docs/latest/index.html)
+The Flask service exposes endpoints for developer usage.
+
+### 1) Online API Mode
+
+`POST /process/api`
+
+Form fields:
+
+* `image`: file upload
+* `provider`: `remove.bg` | `clipdrop` | `photoroom`
+
+Response:
+
+```json
+{ "before": "/static/uploads/<id>", "after": "/static/results/<id>.png" }
+```
+
+Environment variables:
+
+* `REMOVE_BG_API_KEY`
+* `CLIPDROP_API_KEY`
+* `PHOTOROOM_API_KEY`
+
+If keys are missing, the app returns a mocked result with watermark.
+
+### 2) Local Mode
+
+`POST /process/local`
+
+Form fields:
+
+* `image`: file upload
+* `model`: `segmenter.pkl` (or your chosen file)
+
+Response:
+
+```json
+{ "before": "/static/uploads/<id>", "after": "/static/results/<id>.png" }
+```
+
+---
+
+## Kubernetes (minikube)
+
+This repo supports running the full pipeline on Kubernetes:
+
+* PVC for `data/`
+* ConfigMap for Kedro `conf/local/` parameters
+* Jobs for ingestion/preprocessing/train/eval
+* UI deployment + service + ingress
+
+### 1) Use minikube docker images (important)
+
+Build images inside minikube’s docker:
+
+```bash
+eval $(minikube -p minikube docker-env)
+
+docker build -f docker/Dockerfile.kedro -t bgbye-kedro:latest .
+docker build -f docker/Dockerfile.train -t bgbye-train:latest .
+docker build -f docker/Dockerfile.ui    -t bgbye-ui:latest .
+```
+
+### 2) Apply PVC + ConfigMap
+
+```bash
+kubectl create namespace bgbye --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl apply -f k8s/pvc-data.yaml
+kubectl apply -f k8s/cm-kedro-conf.yaml
+```
+
+### 3) Run pipeline jobs (recommended order)
+
+```bash
+kubectl apply -f k8s/job-ingestion.yaml
+kubectl apply -f k8s/job-data-preprocessing.yaml
+kubectl apply -f k8s/job-train.yaml
+kubectl apply -f k8s/job-model-evaluation.yaml
+```
+
+Logs:
+
+```bash
+kubectl -n bgbye logs -f job/bgbye-job-ingestion
+kubectl -n bgbye logs -f job/bgbye-job-data-preprocessing
+kubectl -n bgbye logs -f job/bgbye-job-train
+kubectl -n bgbye logs -f job/bgbye-job-model-evaluation
+```
+
+### 4) Deploy UI
+
+```bash
+kubectl apply -f k8s/ui-deployment.yaml
+kubectl apply -f k8s/ui-service.yaml
+kubectl apply -f k8s/ui-ingress.yaml
+```
+
+Port-forward if needed:
+
+```bash
+kubectl -n bgbye port-forward svc/bgbye-ui-svc 8080:80
+```
+
+---
+
+## Monitoring (Prometheus + Grafana + Pushgateway)
+
+This repo supports basic MLOps monitoring for training jobs using:
+
+* `kube-prometheus-stack`
+* `prometheus-pushgateway`
+* training pushes metrics to pushgateway
+
+### Install (Helm)
+
+```bash
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+helm upgrade --install kps prometheus-community/kube-prometheus-stack -n monitoring
+helm upgrade --install pushgw prometheus-community/prometheus-pushgateway -n monitoring
+```
+
+### Port-forward
+
+```bash
+kubectl -n monitoring port-forward svc/kps-grafana 3000:80
+kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090
+kubectl -n monitoring port-forward svc/pushgw-prometheus-pushgateway 9091:9091
+```
+
+Grafana password:
+
+```bash
+kubectl -n monitoring get secret kps-grafana -o jsonpath="{.data.admin-password}" | base64 -d; echo
+```
+
+---
+
+## Notes / Tips
+
+* If a pod is stuck in `ContainerCreating`, run:
+
+  ```bash
+  kubectl -n bgbye describe pod <pod> | sed -n '/Events:/,$p'
+  ```
+
+  Most issues are missing PVC/ConfigMap or image pull policy.
+
+* Keep dependencies separated:
+
+  * `kedro/background-removal/requirements.txt` for training
+  * `docker/requirements.ui.txt` for UI
+
+---
