@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Background Removal</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
     <main class="container">
@@ -20,21 +20,40 @@
       <div class="grid">
         <div class="card">
           <h2>Online APIs</h2>
-          <p class="small">Send the image to a third-party API provider (uses env keys). Falls back to a mock result if key is missing.</p>
+          <p class="small">
+            Send the image to a third-party API provider (uses env keys).
+            Falls back to a mock result if key is missing.
+          </p>
           <label for="provider">API Provider</label>
           <select id="provider">
             {% for p in providers %}
-            <option value="{{p}}">{{p}}</option>
+            <option value="{{ p }}">{{ p }}</option>
             {% endfor %}
           </select>
           <button id="process-api">Process (API)</button>
         </div>
 
         <div class="card">
-          <h2>Self Train (Pickle Files)</h2>
-          <p class="small">Use a local pickle model under <strong>/models/</strong>. Falls back to a simple heuristic if missing.</p>
-          <label for="model-name">Model filename</label>
-          <input id="model-name" placeholder="segmenter.pkl" value="segmenter.pkl">
+          <h2>Self Train (Local Models)</h2>
+          <p class="small">
+            Uses local models from <strong>Kedro data/06_models</strong> (and optionally <strong>website/models</strong>).
+            Supports <strong>.pkl</strong>, <strong>.keras</strong>, <strong>.h5</strong>, or a <strong>SavedModel folder</strong>.
+            Falls back to a simple heuristic if prediction fails.
+          </p>
+
+          <label for="model-select">Detected models</label>
+          <select id="model-select">
+            {% if local_models and local_models|length > 0 %}
+              {% for m in local_models %}
+              <option value="{{ m }}">{{ m }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="segmenter.pkl">No models found (type below)</option>
+            {% endif %}
+          </select>
+
+          <label for="model-name">Or type model name</label>
+          <input id="model-name" placeholder="my_model.keras / segmenter.pkl / saved_model_dir" value="">
           <button id="process-local">Process (Local)</button>
         </div>
       </div>
@@ -63,6 +82,9 @@
       const afterImg = document.getElementById('after-img');
       const downloadLink = document.getElementById('download-link');
 
+      const modelSelect = document.getElementById('model-select');
+      const modelNameInput = document.getElementById('model-name');
+
       function setStatus(text, err=false){
         status.textContent = text;
         status.className = err ? 'status error' : 'status';
@@ -73,16 +95,21 @@
       dropArea.addEventListener('dragleave', ()=> dropArea.classList.remove('drag'));
       dropArea.addEventListener('drop', (e)=>{
         e.preventDefault(); dropArea.classList.remove('drag');
-        const f = e.dataTransfer.files[0]; if(f) { fileInput.files = e.dataTransfer.files; onFileChange(); }
+        const f = e.dataTransfer.files[0];
+        if(f) { fileInput.files = e.dataTransfer.files; onFileChange(); }
       });
 
       fileInput.addEventListener('change', onFileChange);
+
       function onFileChange(){
         const f = fileInput.files[0];
         if(!f) return;
         fileName.textContent = `${f.name} (${Math.round(f.size/1024)} KB)`;
-        beforeImg.src = URL.createObjectURL(f); beforeImg.hidden = false;
-        afterImg.hidden = true; downloadLink.hidden = true; setStatus('Ready');
+        beforeImg.src = URL.createObjectURL(f);
+        beforeImg.hidden = false;
+        afterImg.hidden = true;
+        downloadLink.hidden = true;
+        setStatus('Ready');
       }
 
       async function postImage(url, formData){
@@ -101,16 +128,26 @@
       }
 
       document.getElementById('process-api').addEventListener('click', ()=>{
-        const f = fileInput.files[0]; if(!f){ setStatus('No file selected', true); return; }
-        const fd = new FormData(); fd.append('image', f);
+        const f = fileInput.files[0];
+        if(!f){ setStatus('No file selected', true); return; }
+        const fd = new FormData();
+        fd.append('image', f);
         fd.append('provider', document.getElementById('provider').value);
         postImage('/process/api', fd);
       });
 
       document.getElementById('process-local').addEventListener('click', ()=>{
-        const f = fileInput.files[0]; if(!f){ setStatus('No file selected', true); return; }
-        const fd = new FormData(); fd.append('image', f);
-        fd.append('model', document.getElementById('model-name').value || 'segmenter.pkl');
+        const f = fileInput.files[0];
+        if(!f){ setStatus('No file selected', true); return; }
+
+        // Prefer typed model name; fallback to dropdown; final fallback
+        const typed = (modelNameInput.value || '').trim();
+        const selected = modelSelect ? modelSelect.value : '';
+        const model = typed || selected || 'segmenter.pkl';
+
+        const fd = new FormData();
+        fd.append('image', f);
+        fd.append('model', model);
         postImage('/process/local', fd);
       });
     </script>
