@@ -115,7 +115,9 @@
       async function postImage(url, formData){
         setStatus('Processing...');
         try{
-          const res = await fetch(url, { method: 'POST', body: formData });
+          const serviceKey = localStorage.getItem('SERVICE_API_KEY') || '';
+          const headers = serviceKey ? { 'X-Service-Key': serviceKey } : {};
+          const res = await fetch(url, { method: 'POST', body: formData, headers });
           const data = await res.json();
           if(!res.ok) throw new Error(data.error || 'Processing failed');
           beforeImg.src = data.before; beforeImg.hidden = false;

@@ -17,19 +17,23 @@ from werkzeug.utils import secure_filename
 import secrets
 from functools import wraps
 
-SERVICE_API_KEY = os.getenv("SERVICE_API_KEY")          # set in Docker/K8s Secret
 SERVICE_KEY_HEADER = "X-Service-Key"                    # client sends this header
 MAX_BATCH_IMAGES = int(os.getenv("MAX_BATCH_IMAGES", "25"))
+
+
+def get_service_key():
+    return os.getenv("SERVICE_API_KEY")
 
 def require_service_key(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
+        key = get_service_key()
         # If you want to force key always, delete this block:
-        if not SERVICE_API_KEY:
+        if not key:
             return fn(*args, **kwargs)
 
         provided = request.headers.get(SERVICE_KEY_HEADER, "")
-        if not secrets.compare_digest(provided, SERVICE_API_KEY):
+        if not secrets.compare_digest(provided, key):
             return jsonify({"error": "Unauthorized"}), 401
         return fn(*args, **kwargs)
     return wrapper
@@ -419,6 +423,7 @@ def index():
 
 
 @app.route("/process/api", methods=["POST"])
+@require_service_key
 def process_api():
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
@@ -468,9 +473,9 @@ def process_local():
         return jsonify({"error": "Invalid file"}), 400
 
     # Only allow model selection if dev key is valid
-    is_dev = (SERVICE_API_KEY and secrets.compare_digest(
-        request.headers.get(SERVICE_KEY_HEADER, ""), SERVICE_API_KEY
-    ))
+    key = get_service_key()
+    provided = request.headers.get(SERVICE_KEY_HEADER, "")
+    is_dev = (key and secrets.compare_digest(provided, key))
     model_name = request.form.get("model", "segmenter.pkl") if is_dev else None
 
     uid, path = save_upload(file)

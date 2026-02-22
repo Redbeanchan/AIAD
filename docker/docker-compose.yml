@@ -38,6 +38,9 @@ services:
       context: .
       dockerfile: Dockerfile.ui
     container_name: bgbye-ui
+    environment:
+      SERVICE_API_KEY: dev-secret
+      MAX_BATCH_IMAGES: 50
     ports:
       - "8080:8080"
     restart: unless-stopped
